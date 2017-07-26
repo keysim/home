@@ -5,6 +5,28 @@
 #include <RF24/RF24.h>
 
 #include <json/json.h>
+
+#include "socketcpp/include/sio_client.h"
+
+#include <functional>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <string>
+
+#define HIGHLIGHT(__O__) std::cout<<"\e[1;31m"<<__O__<<"\e[0m"<<std::endl
+#define EM(__O__) std::cout<<"\e[1;30;1m"<<__O__<<"\e[0m"<<std::endl
+
+#define MAIN_FUNC int main(int argc ,const char* args[])
+
+using namespace sio;
+std::mutex _lock;
+
+std::condition_variable_any _cond;
+bool connect_finish = false;
+
+
+
 using namespace std;
 
 RF24 radio(RPI_V2_GPIO_P1_15, RPI_V2_GPIO_P1_24, BCM2835_SPI_SPEED_16MHZ);
@@ -107,3 +129,35 @@ int main(int argc, char** argv)
    radio.stopListening();
    finish(true, 0, answer.message);
 }
+
+class connection_listener
+{
+    sio::client &handler;
+
+public:
+
+    connection_listener(sio::client& h):
+    handler(h)
+    {
+    }
+
+
+    void on_connected()
+    {
+        _lock.lock();
+        _cond.notify_all();
+        connect_finish = true;
+        _lock.unlock();
+    }
+    void on_close(client::close_reason const& reason)
+    {
+        std::cout<<"sio closed "<<std::endl;
+        exit(0);
+    }
+
+    void on_fail()
+    {
+        std::cout<<"sio failed "<<std::endl;
+        exit(0);
+    }
+};
